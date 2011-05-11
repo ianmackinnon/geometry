@@ -18,10 +18,13 @@ ${name} 1 index ${len(index)} \\
 %for text in index:
 ${text} \\
 %endfor
-
+\\
 %endfor
-
+\\
 %for p, (name, pointattr) in enumerate(geometry.pointattrs.items()):
+%if name in geometry.point_attr_string_dict.keys():
+<% continue %>
+%endif
 ${name} 1 int 0
 %endfor
 %endif
