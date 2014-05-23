@@ -65,7 +65,7 @@ ${name} 1 float 0
 %endif
 
 %for p, prim in enumerate(geometry.prims):
-Poly ${len(prim)} < ${" ".join([str(v) for v in prim])} \\
+Poly ${len(prim["points"])} ${"<" if prim["closed"] else ":"} ${" ".join([str(v) for v in prim["points"]])} \\
 %if geometry.prim_attrs:
 [${"\t".join([str(geometry.prim_attrs[key]["values"][p]) for key in geometry.prim_attrs])}] \\
 %endif
@@ -102,8 +102,8 @@ endExtra
         self.points.append((x, y, z))
         return len(self.points) - 1
 
-    def add_prim(self, point_numbers):
-        self.prims.append(point_numbers)
+    def add_prim(self, point_numbers, closed=True):
+        self.prims.append({"closed": closed, "points": point_numbers})
         return len(self.prims) - 1
 
         
