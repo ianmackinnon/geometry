@@ -3,6 +3,7 @@
 
 import re
 import sys
+import shlex
 
 from mako.template import Template
 from mako import exceptions
@@ -171,15 +172,9 @@ endExtra
 
 
 def parse_index(text):
-    parts = text.split(" \"")
+    parts = shlex.split(text)
     length = int(parts.pop(0))
     assert len(parts) == length
-    for i, part in enumerate(parts):
-        assert part[-1] == u"\""
-        part = part[:-1]
-        part = part.replace("\\\"", "\"")
-        part = part.replace("\\\\", "\\")
-        parts[i] = part
     return parts
 
 
