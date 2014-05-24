@@ -196,7 +196,7 @@ def parse_attribute_definition(line, attributes):
             elif type_ == "float":
                 values = [float(v) for v in values]
             else:
-                raise TypeError
+                raise TypeError, type_
             assert len(values) == length
         attributes.append({
             "name": name,
@@ -313,6 +313,8 @@ def read(path):
         if mode == "Prim":
             line = line.replace("[", "").replace("]", "")
             parts = re.split("\s+", line)
+            if parts[0] == "Poly":
+                parts.pop(0)
             length = int(parts.pop(0))
             closed = parts.pop(0) == "<"
             point_list = parts[:length]
