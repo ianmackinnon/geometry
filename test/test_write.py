@@ -29,12 +29,17 @@ def main():
     for i, point in enumerate(geometry.points):
         geometry.set_point_attr_int("pointInt1", i, i)
         geometry.set_point_attr_float("pointFloat1", i, i * 0.1)
+        geometry.set_point_attr_float("pointFloat3", i,
+                                      [i * 1.1, i * 2.2, i * 3.3])
         geometry.set_point_attr_string("pointString1", i,
                                        """pointString1 value is %d \ " '""" % i)
+        geometry.set_point_attr_float("pointFloat1", i, i * 0.1)
 
     for i, point in enumerate(geometry.prims):
         geometry.set_prim_attr_int("primInt1", i, i)
         geometry.set_prim_attr_float("primFloat1", i, i * 0.1)
+        geometry.set_prim_attr_float("primFloat3", i,
+                                      [i * 1.1, i * 2.2, i * 3.3])
         geometry.set_prim_attr_string("primString1", i,
                                        """primString1 value is %d \ " '""" % i)
 

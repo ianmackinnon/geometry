@@ -7,6 +7,8 @@ import sys
 from mako.template import Template
 from mako import exceptions
 
+
+
 class Geometry(object):
 
     geo_template = """PGEOMETRY V5
@@ -26,11 +28,7 @@ ${name} 1 index ${len(index)} \\
 %endfor
 
 %else:
-%if point_attr["type"] == int:
-${name} 1 int 0
-%else:
-${name} 1 float 0
-%endif
+${name} ${point_attr["length"]} ${point_attr["type"] == int and "int" or "float"} ${" ".join([str(v) for v in point_attr["default"]])}
 %endif
 %endfor
 %endif
@@ -38,7 +36,7 @@ ${name} 1 float 0
 %for p, point in enumerate(geometry.points):
 ${"%f %f %f %f" % (point[0], point[1], point[2], 1.0)} \\
 %if geometry.point_attrs:
-(${"\t".join([str(geometry.point_attrs[key]["values"][p]) for key in geometry.point_attrs])}) \\
+(${"\t".join([" ".join([str(v) for v in geometry.point_attrs[key]["values"][p]]) for key in geometry.point_attrs])}) \\
 %endif
 
 %endfor
@@ -58,11 +56,7 @@ ${name} 1 index ${len(index)} \\
 %endfor
 
 %else:
-%if prim_attr["type"] == int:
-${name} 1 int 0
-%else:
-${name} 1 float 0
-%endif
+${name} ${prim_attr["length"]} ${prim_attr["type"] == int and "int" or "float"} ${" ".join([str(v) for v in prim_attr["default"]])}
 %endif
 %endfor
 %endif
@@ -70,7 +64,7 @@ ${name} 1 float 0
 %for p, prim in enumerate(geometry.prims):
 Poly ${len(prim["points"])} ${"<" if prim["closed"] else ":"} ${" ".join([str(v) for v in prim["points"]])} \\
 %if geometry.prim_attrs:
-[${"\t".join([str(geometry.prim_attrs[key]["values"][p]) for key in geometry.prim_attrs])}] \\
+(${"\t".join([" ".join([str(v) for v in geometry.prim_attrs[key]["values"][p]]) for key in geometry.prim_attrs])}) \\
 %endif
 
 %endfor
@@ -96,11 +90,6 @@ endExtra
         self.prim_attr_string_dict = {}
 
 
-    def assert_type(self, attrs, name, type_):
-        if attrs[name]["type"] != type_:
-            raise TypeError("Point attribute '%s' already has type '%s'." % (name, attrs[name]["type"]))
-        
-        
     def add_point(self, x, y, z):
         self.points.append((x, y, z))
         return len(self.points) - 1
@@ -109,22 +98,29 @@ endExtra
         self.prims.append({"closed": closed, "points": point_numbers})
         return len(self.prims) - 1
 
+    def set_scalar_attr(self, attributes, obj, type_, name, index, values):
+        if not hasattr(values, "__len__"):
+            values = [values]
+        length = len(values)
+        if not name in attributes:
+            attributes[name] = {
+                "type": type_,
+                "length": length,
+                "values": {},
+                "default": [type_() for i in range(length)],
+            }
+        else:
+            if attributes[name]["type"] != type_:
+                raise TypeError("%s attribute '%s' already has type '%s'." % (obj, name, attributes[name]["type"]))
+            if attributes[name]["length"] != length:
+                raise TypeError("%s attribute '%s' already has length '%s'." % (obj, name, attributes[name]["length"]))                
+        attributes[name]["values"][index] = values
         
-    def set_point_attr_int(self, name, index, value):
-        assert value == int(value)
-        if not name in self.point_attrs:
-            self.point_attrs[name] = {"type": int, "values": {}}
-        else:
-            self.assert_type(self.point_attrs, name, int)
-        self.point_attrs[name]["values"][index] = value
+    def set_point_attr_int(self, name, index, values):
+        self.set_scalar_attr(self.point_attrs, "Point", int, name, index, values)
 
-    def set_point_attr_float(self, name, index, value):
-        assert value == float(value)
-        if not name in self.point_attrs:
-            self.point_attrs[name] = {"type": float, "values": {}}
-        else:
-            self.assert_type(self.point_attrs, name, float)
-        self.point_attrs[name]["values"][index] = value
+    def set_point_attr_float(self, name, index, values):
+        self.set_scalar_attr(self.point_attrs, "Point", float, name, index, values)
 
     def set_point_attr_string(self, name, point_number, value):
         assert hasattr(name, "strip")
@@ -137,21 +133,11 @@ endExtra
         self.set_point_attr_int(name, point_number, index)
 
 
-    def set_prim_attr_int(self, name, index, value):
-        assert value == int(value)
-        if not name in self.prim_attrs:
-            self.prim_attrs[name] = {"type": int, "values": {}}
-        else:
-            self.assert_type(self.prim_attrs, name, int)
-        self.prim_attrs[name]["values"][index] = value
+    def set_prim_attr_int(self, name, index, values):
+        self.set_scalar_attr(self.prim_attrs, "Prim", int, name, index, values)
 
-    def set_prim_attr_float(self, name, index, value):
-        assert value == float(value)
-        if not name in self.prim_attrs:
-            self.prim_attrs[name] = {"type": float, "values": {}}
-        else:
-            self.assert_type(self.prim_attrs, name, float)
-        self.prim_attrs[name]["values"][index] = value
+    def set_prim_attr_float(self, name, index, values):
+        self.set_scalar_attr(self.prim_attrs, "Prim", float, name, index, values)
 
     def set_prim_attr_string(self, name, prim_number, value):
         assert hasattr(name, "strip")
@@ -198,6 +184,66 @@ def parse_index(text):
 
 
 
+def parse_attribute_definition(line, attributes):
+    regex_string = "(\w+) (\d+) (\w+) (.+)$"
+    regex = re.compile(regex_string)
+    match = regex.match(line)
+    if match:
+        name, length, type_, values = match.groups()
+        length = int(length)
+        if type_ == "index":
+            assert length == 1
+            values = parse_index(values)
+        else:
+            values = values.split()
+            if type_ == "int":
+                values = [int(v) for v in values]
+            elif type_ == "float":
+                values = [float(v) for v in values]
+            else:
+                raise TypeError
+            assert len(values) == length
+        attributes.append({
+            "name": name,
+            "type": type_,
+            "values": values,
+        })
+        return True
+
+def attributes_length(attributes):
+    total = 0
+    for attr in attributes:
+        if attr["type"] == "index":
+            total += 1
+        else:
+            total += len(attr["values"])
+    return total
+
+def parse_attr_values(attrs, attributes, count,
+                      set_int, set_float, set_string):
+    assert len(attrs) == attributes_length(attributes), repr((
+        len(attrs), attributes_length(attributes),
+        attrs, attributes
+        ))
+    for attr in attributes:
+        if attr["type"] == "index":
+            value = int(attrs.pop(0))
+            set_string(attr["name"], count, attr["values"][value])
+            continue
+        length = len(attr["values"])
+        values = attrs[:length]
+        attrs = attrs[length:]
+        if attr["type"] == "int":
+            values = [int(v) for v in values]
+            set_int(attr["name"], count, values)
+        elif attr["type"] == "float":
+            values = [float(v) for v in values]
+            set_float(attr["name"], count, values)
+        else:
+            raise TypeError, "Type '%s' not recognised." % attr["type"]
+
+
+
 def read(path):
     geo_file = open(path)
     geo = Geometry()
@@ -214,6 +260,9 @@ def read(path):
     prim_attributes = []
     points = 0
     prims = 0
+            
+
+
     for line in geo_file.readlines():
         line = line.strip()
         if not line:
@@ -240,29 +289,13 @@ def read(path):
             break
 
         if mode == "PointAttrib":
-            regex_string = "(\w+) (\d+) (\w+) (.+)$"
-            regex = re.compile(regex_string)
-            match = regex.match(line)
-            if match:
-                name, length, type_, value = match.groups()
-                assert length == '1'
-                if type_ == "index":
-                    value = parse_index(value)
-                point_attributes.append((name, type_, value))
+            if parse_attribute_definition(line, point_attributes):
                 continue
             else:
                 mode = "Point"
 
         if mode == "PrimitiveAttrib":
-            regex_string = "(\w+) (\d+) (\w+) (.+)$"
-            regex = re.compile(regex_string)
-            match = regex.match(line)
-            if match:
-                name, length, type_, value = match.groups()
-                assert length == '1'
-                if type_ == "index":
-                    value = parse_index(value)
-                prim_attributes.append((name, type_, value))
+            if parse_attribute_definition(line, prim_attributes):
                 continue
             elif re.match("Run \d+ Poly$", line):
                 continue
@@ -275,16 +308,11 @@ def read(path):
             x, y, z, w = (float(v) for v in parts[:4])
             attrs = parts[4:]
             geo.add_point(x, y, z)
-            assert len(attrs) == len(point_attributes)
-            for i, (name, type_, value) in enumerate(point_attributes):
-                if type_ == "int":
-                    geo.set_point_attr_int(name, points, int(attrs[i]))
-                elif type_ == "float":
-                    geo.set_point_attr_float(name, points, float(attrs[i]))
-                elif type_ == "index":
-                    geo.set_point_attr_string(name, points, value[int(attrs[i])])
-                else:
-                    raise TypeError, "Type '%s' not recognised." % type_
+            parse_attr_values(attrs, point_attributes, points,
+                              geo.set_point_attr_int,
+                              geo.set_point_attr_float,
+                              geo.set_point_attr_string,
+                              )
             points += 1
 
         if mode == "Prim":
@@ -292,20 +320,14 @@ def read(path):
             parts = re.split("\s+", line)
             length = int(parts.pop(0))
             closed = parts.pop(0) == "<"
-            point_list = parts[length:]
-            attrs = parts[:length]
-            attrs = parts[4:]
+            point_list = parts[:length]
+            attrs = parts[length:]
             geo.add_prim(point_list, closed=closed)
-            assert len(attrs) == len(prim_attributes)
-            for i, (name, type_, value) in enumerate(prim_attributes):
-                if type_ == "int":
-                    geo.set_prim_attr_int(name, prims, int(attrs[i]))
-                elif type_ == "float":
-                    geo.set_prim_attr_float(name, prims, float(attrs[i]))
-                elif type_ == "index":
-                    geo.set_prim_attr_string(name, prims, value[int(attrs[i])])
-                else:
-                    raise TypeError, "Type '%s' not recognised." % type_
+            parse_attr_values(attrs, prim_attributes, prims,
+                              geo.set_prim_attr_int,
+                              geo.set_prim_attr_float,
+                              geo.set_prim_attr_string,
+                              )
             prims += 1
 
     return geo
