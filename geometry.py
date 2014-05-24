@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 #-*- coding utf-8 -*-
 
+import re
+import sys
+
 from mako.template import Template
 from mako import exceptions
 
@@ -178,3 +181,131 @@ endExtra
             return Template(self.geo_template).render(geometry=self)
         except:
             print exceptions.text_error_template().render()
+
+
+
+def parse_index(text):
+    parts = text.split(" \"")
+    length = int(parts.pop(0))
+    assert len(parts) == length
+    for i, part in enumerate(parts):
+        assert part[-1] == u"\""
+        part = part[:-1]
+        part = part.replace("\\\"", "\"")
+        part = part.replace("\\\\", "\\")
+        parts[i] = part
+    return parts
+
+
+
+def read(path):
+    geo_file = open(path)
+    geo = Geometry()
+    headlines = [
+        ("PGEOMETRY V5", ()),
+        ("NPoints (\d+) NPrims (\d+)", ("npoints", "nprims")),
+        ("NPointGroups (\d+) NPrimGroups (\d+)", ("npointgroups", "nprimgroups")),
+        ("NPointAttrib (\d+) NVertexAttrib (\d+) NPrimAttrib (\d+) NAttrib (\d+)", ("npointattrib", "nvertexattrib", "nprimattrib", "nattrib")),
+        ]
+
+    attr = {}
+    mode = None
+    point_attributes = []
+    prim_attributes = []
+    points = 0
+    prims = 0
+    for line in geo_file.readlines():
+        line = line.strip()
+        if not line:
+            continue
+
+        if headlines:
+            regex_string, keys = headlines.pop(0)
+            regex = re.compile(regex_string)
+            match = regex.match(line)
+            if not match:
+                print "Failed to match '%s' with line '%s'." % (regex_string, line)
+                sys.exit(1)
+            values = [int(x) for x in match.groups()]
+            attr.update(dict(zip(keys, values)))
+            continue
+        
+        if line == "PointAttrib":
+            mode = "PointAttrib"
+            continue
+        if line == "PrimitiveAttrib":
+            mode = "PrimitiveAttrib"
+            continue
+        if line == "DetailAttrib":
+            break
+
+        if mode == "PointAttrib":
+            regex_string = "(\w+) (\d+) (\w+) (.+)$"
+            regex = re.compile(regex_string)
+            match = regex.match(line)
+            if match:
+                name, length, type_, value = match.groups()
+                assert length == '1'
+                if type_ == "index":
+                    value = parse_index(value)
+                point_attributes.append((name, type_, value))
+                continue
+            else:
+                mode = "Point"
+
+        if mode == "PrimitiveAttrib":
+            regex_string = "(\w+) (\d+) (\w+) (.+)$"
+            regex = re.compile(regex_string)
+            match = regex.match(line)
+            if match:
+                name, length, type_, value = match.groups()
+                assert length == '1'
+                if type_ == "index":
+                    value = parse_index(value)
+                prim_attributes.append((name, type_, value))
+                continue
+            elif re.match("Run \d+ Poly$", line):
+                continue
+            else:
+                mode = "Prim"
+
+        if mode == "Point":
+            line = line.replace("(", "").replace(")", "")
+            parts = re.split("\s+", line)
+            x, y, z, w = (float(v) for v in parts[:4])
+            attrs = parts[4:]
+            geo.add_point(x, y, z)
+            assert len(attrs) == len(point_attributes)
+            for i, (name, type_, value) in enumerate(point_attributes):
+                if type_ == "int":
+                    geo.set_point_attr_int(name, points, int(attrs[i]))
+                elif type_ == "float":
+                    geo.set_point_attr_float(name, points, float(attrs[i]))
+                elif type_ == "index":
+                    geo.set_point_attr_string(name, points, value[int(attrs[i])])
+                else:
+                    raise TypeError, "Type '%s' not recognised." % type_
+            points += 1
+
+        if mode == "Prim":
+            line = line.replace("[", "").replace("]", "")
+            parts = re.split("\s+", line)
+            length = int(parts.pop(0))
+            closed = parts.pop(0) == "<"
+            point_list = parts[length:]
+            attrs = parts[:length]
+            attrs = parts[4:]
+            geo.add_prim(point_list, closed=closed)
+            assert len(attrs) == len(prim_attributes)
+            for i, (name, type_, value) in enumerate(prim_attributes):
+                if type_ == "int":
+                    geo.set_prim_attr_int(name, prims, int(attrs[i]))
+                elif type_ == "float":
+                    geo.set_prim_attr_float(name, prims, float(attrs[i]))
+                elif type_ == "index":
+                    geo.set_prim_attr_string(name, prims, value[int(attrs[i])])
+                else:
+                    raise TypeError, "Type '%s' not recognised." % type_
+            prims += 1
+
+    return geo
