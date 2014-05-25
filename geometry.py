@@ -152,12 +152,18 @@ endExtra
 
 
     def get_point_attr(self, name, index):
-        assert name in self.point_attrs, 'no such name'
-        return self.point_attrs[name]["values"].get(index, 0)
+        assert name in self.point_attrs, "No such point attribute '%s'." % name
+        value = self.point_attrs[name]["values"].get(index, 0) 
+        if len(value) == 1:
+            return value[0]
+        return value
 
     def get_prim_attr(self, name, index):
-        assert name in self.prim_attrs, 'no such name'
-        return self.prim_attrs[name]["values"].get(index, 0)
+        assert name in self.prim_attrs, "No such primitive attribute '%s'." % name
+        value = self.prim_attrs[name]["values"].get(index, 0) 
+        if len(value) == 1:
+            return value[0]
+        return value
 
     @property
     def attr_names(self):
