@@ -123,15 +123,15 @@ endExtra
     def set_point_attr_float(self, name, index, values):
         self.set_scalar_attr(self.point_attrs, "Point", float, name, index, values)
 
-    def set_point_attr_string(self, name, point_number, value):
+    def set_point_attr_string(self, name, index, value):
         assert hasattr(name, "strip")
-        assert point_number == int(point_number)
+        assert index == int(index)
         if not name in self.point_attr_string_dict:
             self.point_attr_string_dict[name] = []
         if not value in self.point_attr_string_dict[name]:
             self.point_attr_string_dict[name].append(value)
-        index = self.point_attr_string_dict[name].index(value)
-        self.set_point_attr_int(name, point_number, index)
+        value = self.point_attr_string_dict[name].index(value)
+        self.set_scalar_attr(self.point_attrs, "Point", str, name, index, value)
 
 
     def set_prim_attr_int(self, name, index, values):
@@ -140,29 +140,33 @@ endExtra
     def set_prim_attr_float(self, name, index, values):
         self.set_scalar_attr(self.prim_attrs, "Prim", float, name, index, values)
 
-    def set_prim_attr_string(self, name, prim_number, value):
+    def set_prim_attr_string(self, name, index, value):
         assert hasattr(name, "strip")
-        assert prim_number == int(prim_number)
+        assert index == int(index)
         if not name in self.prim_attr_string_dict:
             self.prim_attr_string_dict[name] = []
         if not value in self.prim_attr_string_dict[name]:
             self.prim_attr_string_dict[name].append(value)
-        index = self.prim_attr_string_dict[name].index(value)
-        self.set_prim_attr_int(name, prim_number, index)
+        value = self.prim_attr_string_dict[name].index(value)
+        self.set_scalar_attr(self.prim_attrs, "Prim", str, name, index, value)
 
 
     def get_point_attr(self, name, index):
         assert name in self.point_attrs, "No such point attribute '%s'." % name
         value = self.point_attrs[name]["values"].get(index, 0) 
-        if len(value) == 1:
-            return value[0]
+        if hasattr(value, "__len__") and len(value) == 1:
+            value = value[0]
+        if self.point_attrs[name]["type"] == str:
+            value = self.point_attr_string_dict[name][value]
         return value
 
     def get_prim_attr(self, name, index):
         assert name in self.prim_attrs, "No such primitive attribute '%s'." % name
         value = self.prim_attrs[name]["values"].get(index, 0) 
-        if len(value) == 1:
-            return value[0]
+        if hasattr(value, "__len__") and len(value) == 1:
+            value = value[0]
+        if self.prim_attrs[name]["type"] == str:
+            value = self.prim_attr_string_dict[name][value]
         return value
 
     @property
